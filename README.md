@@ -99,6 +99,7 @@ Available shades: `50` `100` `150` `200` `300` `400` `500` `600` `700` `800` `85
 | App | Repo |
 |-----|------|
 | Warp | [flynt-theme/flynt-warp](https://github.com/flynt-theme/flynt-warp) |
+| Zed | [flynt-theme/flynt-zed](https://github.com/flynt-theme/flynt-zed) |
 
 ## License
 
