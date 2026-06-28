@@ -9,6 +9,43 @@ import (
 	"testing"
 )
 
+func minimalRaw() raw {
+	darkTokens := []json.RawMessage{
+		mustMarshal(baseToken{Token: "bg", Hex: "100E0C"}),
+		mustMarshal(baseToken{Token: "bg-2", Hex: "1C1916"}),
+		mustMarshal(baseToken{Token: "tx", Hex: "F5EDD8"}),
+		mustMarshal(baseToken{Token: "tx-2", Hex: "D8CEBC"}),
+		mustMarshal(accentToken{Token: "amber", Hex: "C69F2A"}),
+		mustMarshal(accentToken{Token: "ember", Hex: "C6372A"}),
+	}
+	lightTokens := []json.RawMessage{
+		mustMarshal(baseToken{Token: "bg", Hex: "FFFCEF"}),
+		mustMarshal(baseToken{Token: "bg-2", Hex: "F2EDDE"}),
+		mustMarshal(baseToken{Token: "tx", Hex: "1A1512"}),
+		mustMarshal(baseToken{Token: "tx-2", Hex: "3D3228"}),
+		mustMarshal(accentToken{Token: "amber", Hex: "C69F2A"}),
+		mustMarshal(accentToken{Token: "ember", Hex: "C6372A"}),
+	}
+	shades := map[string]map[string]string{
+		"amber": {"300": "#D4A84B", "500": "#C69F2A"},
+		"ember": {"300": "#D45A4B", "500": "#C6372A"},
+	}
+	return raw{
+		Info:   map[string]string{"name": "Flynt", "version": "0.1.0"},
+		Shades: shades,
+		Dark:   darkTokens,
+		Light:  lightTokens,
+	}
+}
+
+func mustMarshal(v any) json.RawMessage {
+	b, err := json.Marshal(v)
+	if err != nil {
+		panic(err)
+	}
+	return b
+}
+
 func writePaletteFile(t *testing.T, dir string, p raw) string {
 	t.Helper()
 	data, err := json.Marshal(p)
@@ -22,36 +59,9 @@ func writePaletteFile(t *testing.T, dir string, p raw) string {
 	return path
 }
 
-func minimalPalette() raw {
-	tok := func(name, hex string, hsl [3]int) token {
-		return token{Token: name, Hex: hex, HSL: hsl}
-	}
-	dark := []token{
-		tok("bg", "100E0C", [3]int{30, 14, 5}),
-		tok("bg-2", "1C1916", [3]int{30, 12, 10}),
-		tok("tx", "F5EDD8", [3]int{40, 60, 90}),
-		tok("tx-2", "D8CEBC", [3]int{40, 25, 80}),
-		tok("amber", "C69F2A", [3]int{43, 67, 47}),
-		tok("ember", "C6372A", [3]int{3, 68, 47}),
-	}
-	light := []token{
-		tok("bg", "FFFCEF", [3]int{50, 100, 97}),
-		tok("bg-2", "F2EDDE", [3]int{43, 53, 91}),
-		tok("tx", "1A1512", [3]int{30, 16, 9}),
-		tok("tx-2", "3D3228", [3]int{30, 21, 20}),
-		tok("amber", "C69F2A", [3]int{43, 67, 47}),
-		tok("ember", "C6372A", [3]int{3, 68, 47}),
-	}
-	return raw{
-		Info:  map[string]string{"name": "Flynt", "version": "0.1.0"},
-		Dark:  dark,
-		Light: light,
-	}
-}
-
 func TestLoad_FromFile(t *testing.T) {
 	dir := t.TempDir()
-	path := writePaletteFile(t, dir, minimalPalette())
+	path := writePaletteFile(t, dir, minimalRaw())
 
 	contexts, err := Load(path)
 	if err != nil {
@@ -70,7 +80,7 @@ func TestLoad_FromFile(t *testing.T) {
 
 func TestLoad_FromURL(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		data, _ := json.Marshal(minimalPalette())
+		data, _ := json.Marshal(minimalRaw())
 		w.Header().Set("Content-Type", "application/json")
 		w.Write(data)
 	}))
@@ -114,50 +124,66 @@ func TestLoad_InvalidJSONReturnsError(t *testing.T) {
 }
 
 func TestBuildContext_BaseTokens(t *testing.T) {
-	tokens := minimalPalette().Dark
-	ctx := buildContext("dark", tokens)
-
+	p := minimalRaw()
+	ctx, err := buildContext("dark", p.Dark, p.Shades)
+	if err != nil {
+		t.Fatalf("buildContext: %v", err)
+	}
 	if got := ctx.Base["bg"]; got != "#100E0C" {
 		t.Errorf("Base[bg] = %q, want %q", got, "#100E0C")
 	}
+	// Dashes stripped: bg-2 -> bg2
 	if got := ctx.Base["bg2"]; got != "#1C1916" {
 		t.Errorf("Base[bg2] = %q, want %q", got, "#1C1916")
 	}
-	// Dashes stripped: tx-2 -> tx2
+	// tx-2 -> tx2
 	if got := ctx.Base["tx2"]; got != "#D8CEBC" {
 		t.Errorf("Base[tx2] = %q, want %q", got, "#D8CEBC")
 	}
 }
 
 func TestBuildContext_Accents(t *testing.T) {
-	ctx := buildContext("dark", minimalPalette().Dark)
+	p := minimalRaw()
+	ctx, err := buildContext("dark", p.Dark, p.Shades)
+	if err != nil {
+		t.Fatalf("buildContext: %v", err)
+	}
 	if got := ctx.Accents["amber"]; got != "#C69F2A" {
 		t.Errorf("Accents[amber] = %q, want %q", got, "#C69F2A")
 	}
 }
 
-func TestBuildContext_ShadesComputed(t *testing.T) {
-	ctx := buildContext("dark", minimalPalette().Dark)
-	if _, ok := ctx.Shades["amber"]; !ok {
-		t.Fatal("Shades[amber] not present")
+func TestBuildContext_ShadesFromJSON(t *testing.T) {
+	p := minimalRaw()
+	ctx, err := buildContext("dark", p.Dark, p.Shades)
+	if err != nil {
+		t.Fatalf("buildContext: %v", err)
 	}
-	if _, ok := ctx.Shades["amber"]["500"]; !ok {
-		t.Error("Shades[amber][500] not present")
+	if got := ctx.Shades["amber"]["300"]; got != "#D4A84B" {
+		t.Errorf("Shades[amber][300] = %q, want %q", got, "#D4A84B")
 	}
-	if _, ok := ctx.Shades["amber"]["300"]; !ok {
-		t.Error("Shades[amber][300] not present")
+	if got := ctx.Shades["amber"]["500"]; got != "#C69F2A" {
+		t.Errorf("Shades[amber][500] = %q, want %q", got, "#C69F2A")
 	}
 }
 
 func TestBuildContext_KnownVariantLabel(t *testing.T) {
-	ctx := buildContext("dark", minimalPalette().Dark)
+	p := minimalRaw()
+	ctx, err := buildContext("dark", p.Dark, p.Shades)
+	if err != nil {
+		t.Fatalf("buildContext: %v", err)
+	}
 	if ctx.Label != "Flynt Dark" {
 		t.Errorf("Label = %q, want %q", ctx.Label, "Flynt Dark")
 	}
 }
 
 func TestBuildContext_UnknownVariantLabel(t *testing.T) {
-	ctx := buildContext("custom", minimalPalette().Dark)
+	p := minimalRaw()
+	ctx, err := buildContext("custom", p.Dark, p.Shades)
+	if err != nil {
+		t.Fatalf("buildContext: %v", err)
+	}
 	if ctx.Label != "Flynt Custom" {
 		t.Errorf("Label = %q, want %q", ctx.Label, "Flynt Custom")
 	}

@@ -4,59 +4,45 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"math"
 	"net/http"
 	"os"
 	"strings"
 	"time"
 )
 
-const DefaultURL = "https://raw.githubusercontent.com/flynt-theme/flynt/main/palette.json"
+const DefaultURL = "https://flynt-theme.github.io/flynt/palette.json"
 
-var lightness = map[string]float64{
-	"50": 91, "100": 87, "150": 81, "200": 76,
-	"300": 64, "400": 53, "500": 47, "600": 42,
-	"700": 36, "800": 27, "850": 21, "900": 16, "950": 11,
-}
-
-var shadeOrder = []string{"50", "100", "150", "200", "300", "400", "500", "600", "700", "800", "850", "900", "950"}
-
-type token struct {
+type baseToken struct {
 	Token string `json:"token"`
 	Hex   string `json:"hex"`
-	HSL   [3]int `json:"hsl"`
+}
+
+type accentToken struct {
+	Token  string            `json:"token"`
+	Hex    string            `json:"hex"`
+	Shades map[string]string `json:"shades"`
 }
 
 type raw struct {
-	Info  map[string]string `json:"_info"`
-	Dark  []token           `json:"dark"`
-	Light []token           `json:"light"`
+	Info  map[string]string            `json:"_info"`
+	Shades map[string]map[string]string `json:"shades"`
+	Dark  []json.RawMessage            `json:"dark"`
+	Light []json.RawMessage            `json:"light"`
 }
 
 // Context is the template context for one variant.
 type Context struct {
 	Variant string
 	Label   string
-	// Base tokens (dashes replaced with underscores for template access, e.g. tx-2 -> tx2)
+	// Base tokens (dashes removed for template access, e.g. tx-2 -> tx2).
 	Base map[string]string
+	// Accent primaries keyed by name.
 	Accents map[string]string
-	// All shades per accent: Shades["amber"]["300"]
+	// All shades per accent: Shades["amber"]["300"].
 	Shades map[string]map[string]string
 }
 
-func hslToHex(h, s, l float64) string {
-	s /= 100
-	l /= 100
-	a := s * math.Min(l, 1-l)
-	f := func(n float64) int {
-		k := math.Mod(n+h/30, 12)
-		val := l - a*math.Max(math.Min(k-3, math.Min(9-k, 1)), -1)
-		return int(math.Round(val * 255))
-	}
-	return fmt.Sprintf("#%02X%02X%02X", f(0), f(8), f(4))
-}
-
-func buildContext(variant string, tokens []token) Context {
+func buildContext(variant string, tokens []json.RawMessage, shades map[string]map[string]string) (Context, error) {
 	labels := map[string]string{"dark": "Flynt Dark", "light": "Flynt Light"}
 	label, ok := labels[variant]
 	if !ok && len(variant) > 0 {
@@ -67,28 +53,21 @@ func buildContext(variant string, tokens []token) Context {
 
 	base := map[string]string{}
 	accents := map[string]string{}
-	accentHues := map[string]float64{}
-	accentSats := map[string]float64{}
 
-	for _, t := range tokens {
-		name := t.Token
-		hex := "#" + t.Hex
+	for _, raw := range tokens {
+		// Try base token first (no shades field).
+		var bt baseToken
+		if err := json.Unmarshal(raw, &bt); err != nil {
+			return Context{}, fmt.Errorf("parse token: %w", err)
+		}
+		name := bt.Token
+		hex := "#" + strings.ToUpper(bt.Hex)
+
 		if strings.HasPrefix(name, "bg") || strings.HasPrefix(name, "tx") {
 			key := strings.ReplaceAll(name, "-", "")
 			base[key] = hex
 		} else {
 			accents[name] = hex
-			accentHues[name] = float64(t.HSL[0])
-			accentSats[name] = float64(t.HSL[1])
-		}
-	}
-
-	shades := map[string]map[string]string{}
-	for name, hue := range accentHues {
-		sat := accentSats[name]
-		shades[name] = map[string]string{}
-		for _, sh := range shadeOrder {
-			shades[name][sh] = hslToHex(hue, sat, lightness[sh])
 		}
 	}
 
@@ -98,13 +77,10 @@ func buildContext(variant string, tokens []token) Context {
 		Base:    base,
 		Accents: accents,
 		Shades:  shades,
-	}
+	}, nil
 }
 
-func Load(src string) ([]Context, error) {
-	var data []byte
-	var err error
-
+func fetch(src string) ([]byte, error) {
 	if strings.HasPrefix(src, "http://") || strings.HasPrefix(src, "https://") {
 		client := &http.Client{Timeout: 30 * time.Second}
 		resp, err := client.Get(src)
@@ -112,18 +88,22 @@ func Load(src string) ([]Context, error) {
 			return nil, fmt.Errorf("fetch %s: %w", src, err)
 		}
 		defer resp.Body.Close()
-		if resp.StatusCode != 200 {
+		if resp.StatusCode != http.StatusOK {
 			return nil, fmt.Errorf("fetch %s: status %d", src, resp.StatusCode)
 		}
-		data, err = io.ReadAll(resp.Body)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		data, err = os.ReadFile(src)
-		if err != nil {
-			return nil, fmt.Errorf("read %s: %w", src, err)
-		}
+		return io.ReadAll(resp.Body)
+	}
+	data, err := os.ReadFile(src)
+	if err != nil {
+		return nil, fmt.Errorf("read %s: %w", src, err)
+	}
+	return data, nil
+}
+
+func Load(src string) ([]Context, error) {
+	data, err := fetch(src)
+	if err != nil {
+		return nil, err
 	}
 
 	var r raw
@@ -131,8 +111,14 @@ func Load(src string) ([]Context, error) {
 		return nil, fmt.Errorf("parse palette: %w", err)
 	}
 
-	return []Context{
-		buildContext("dark", r.Dark),
-		buildContext("light", r.Light),
-	}, nil
+	dark, err := buildContext("dark", r.Dark, r.Shades)
+	if err != nil {
+		return nil, fmt.Errorf("build dark context: %w", err)
+	}
+	light, err := buildContext("light", r.Light, r.Shades)
+	if err != nil {
+		return nil, fmt.Errorf("build light context: %w", err)
+	}
+
+	return []Context{dark, light}, nil
 }
