@@ -50,6 +50,41 @@ func hex2rgb(hex string) string {
 	return fmt.Sprintf("%d,%d,%d", r, g, b)
 }
 
+func nohash(hex string) string {
+	return strings.TrimPrefix(hex, "#")
+}
+
+func hex2rgbf(hex string) string {
+	hex = strings.TrimPrefix(hex, "#")
+	if len(hex) != 6 {
+		return "0.0000 0.0000 0.0000"
+	}
+	r, _ := strconv.ParseInt(hex[0:2], 16, 64)
+	g, _ := strconv.ParseInt(hex[2:4], 16, 64)
+	b, _ := strconv.ParseInt(hex[4:6], 16, 64)
+	return fmt.Sprintf("%.4f %.4f %.4f", float64(r)/255, float64(g)/255, float64(b)/255)
+}
+
+func hexchan(hex, channel string) string {
+	hex = strings.TrimPrefix(hex, "#")
+	if len(hex) != 6 {
+		return "0.0000"
+	}
+	var off int
+	switch channel {
+	case "r":
+		off = 0
+	case "g":
+		off = 2
+	case "b":
+		off = 4
+	default:
+		return "0.0000"
+	}
+	v, _ := strconv.ParseInt(hex[off:off+2], 16, 64)
+	return fmt.Sprintf("%.4f", float64(v)/255)
+}
+
 func shadeFunc(shades interface{}, color, level string) string {
 	m, ok := shades.(map[string]map[string]string)
 	if !ok {
@@ -65,10 +100,13 @@ func shadeFunc(shades interface{}, color, level string) string {
 
 func buildFuncs() template.FuncMap {
 	return template.FuncMap{
-		"lower":   strings.ToLower,
-		"upper":   strings.ToUpper,
-		"hex2rgb": hex2rgb,
-		"shade":   shadeFunc,
+		"lower":    strings.ToLower,
+		"upper":    strings.ToUpper,
+		"hex2rgb":  hex2rgb,
+		"hex2rgbf": hex2rgbf,
+		"hexchan":  hexchan,
+		"nohash":   nohash,
+		"shade":    shadeFunc,
 	}
 }
 

@@ -38,9 +38,7 @@ func main() {
 	}
 }
 
-// partitionArgs separates flag args from positional args so that
-// "strike build template.tmpl --out dir" and "strike build --out dir template.tmpl"
-// both work. Go's flag package stops at the first non-flag arg otherwise.
+// flag.Parse stops at the first non-flag arg, so we pre-sort to support any argument order.
 func partitionArgs(args []string, boolFlags map[string]bool) (flags, positional []string) {
 	i := 0
 	for i < len(args) {

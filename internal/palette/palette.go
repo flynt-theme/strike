@@ -12,7 +12,6 @@ import (
 
 const DefaultURL = "https://raw.githubusercontent.com/flynt-theme/flynt/main/palette.json"
 
-// lightness values per shade step (Flynt spec)
 var lightness = map[string]float64{
 	"50": 91, "100": 87, "150": 81, "200": 76,
 	"300": 64, "400": 53, "500": 47, "600": 42,
@@ -22,9 +21,9 @@ var lightness = map[string]float64{
 var shadeOrder = []string{"50", "100", "150", "200", "300", "400", "500", "600", "700", "800", "850", "900", "950"}
 
 type token struct {
-	Token string    `json:"token"`
-	Hex   string    `json:"hex"`
-	HSL   [3]int    `json:"hsl"`
+	Token string `json:"token"`
+	Hex   string `json:"hex"`
+	HSL   [3]int `json:"hsl"`
 }
 
 type raw struct {
@@ -37,9 +36,8 @@ type raw struct {
 type Context struct {
 	Variant string
 	Label   string
-	// Base tokens (dashes replaced with underscores for template access)
+	// Base tokens (dashes replaced with underscores for template access, e.g. tx-2 -> tx2)
 	Base map[string]string
-	// Accent primary shades (shade 500)
 	Accents map[string]string
 	// All shades per accent: Shades["amber"]["300"]
 	Shades map[string]map[string]string
@@ -61,7 +59,7 @@ func buildContext(variant string, tokens []token) Context {
 	labels := map[string]string{"dark": "Flynt Dark", "light": "Flynt Light"}
 	label, ok := labels[variant]
 	if !ok {
-		label = "Flynt " + strings.Title(variant)
+		label = "Flynt " + strings.ToUpper(variant[:1]) + variant[1:]
 	}
 
 	base := map[string]string{}

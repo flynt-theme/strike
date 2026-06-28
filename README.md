@@ -95,12 +95,17 @@ Available shades: `50` `100` `150` `200` `300` `400` `500` `600` `700` `800` `85
 
 ### Template functions
 
-| Function | Example |
-|----------|---------|
-| `hex2rgb` | `{{ hex2rgb .amber }}` → `198,159,42` |
-| `shade` | `{{ shade .dark.shades "amber" "400" }}` |
-| `lower` | `{{ lower .variant }}` |
-| `upper` | `{{ upper .label }}` |
+| Function | Example | Output |
+|----------|---------|--------|
+| `hex2rgb` | `{{ hex2rgb .amber }}` | `198,159,42` |
+| `hex2rgbf` | `{{ hex2rgbf .amber }}` | `0.7765 0.6235 0.1647` |
+| `hexchan` | `{{ hexchan .amber "r" }}` | `0.7765` |
+| `nohash` | `{{ nohash .amber }}` | `C69F2A` |
+| `shade` | `{{ shade .dark.shades "amber" "400" }}` | hex string |
+| `lower` | `{{ lower .variant }}` | `dark` |
+| `upper` | `{{ upper .label }}` | `FLYNT DARK` |
+
+`hexchan` accepts `"r"`, `"g"`, or `"b"` as the channel argument. Useful for formats like iTerm2 that need each component on a separate line.
 
 ## Ports
 
@@ -109,6 +114,8 @@ Available shades: `50` `100` `150` `200` `300` `400` `500` `600` `700` `800` `85
 | Obsidian | [flynt-theme/flynt-obsidian](https://github.com/flynt-theme/flynt-obsidian) |
 | Warp | [flynt-theme/flynt-warp](https://github.com/flynt-theme/flynt-warp) |
 | Zed | [flynt-theme/flynt-zed](https://github.com/flynt-theme/flynt-zed) |
+| Ghostty | [flynt-theme/flynt-ghostty](https://github.com/flynt-theme/flynt-ghostty) |
+| iTerm2 | [flynt-theme/flynt-iterm2](https://github.com/flynt-theme/flynt-iterm2) |
 
 ## License
 
