@@ -20,6 +20,7 @@ Flags:
   --palette   Path or URL to palette.json (default: fetch from flynt-theme/flynt)
   --out       Output directory (default: dist/)
   --check     Exit non-zero if outputs are stale, without writing
+  --combined  Render once with both dark and light contexts (for single-file themes)
 `
 
 func main() {
@@ -68,8 +69,9 @@ func runBuild(args []string) {
 	paletteSrc := fs.String("palette", palette.DefaultURL, "path or URL to palette.json")
 	outDir := fs.String("out", "dist", "output directory")
 	check := fs.Bool("check", false, "check outputs are up to date without writing")
+	combined := fs.Bool("combined", false, "render once with both dark and light contexts")
 
-	flagArgs, posArgs := partitionArgs(args, map[string]bool{"check": true})
+	flagArgs, posArgs := partitionArgs(args, map[string]bool{"check": true, "combined": true})
 	fs.Parse(flagArgs)
 
 	if len(posArgs) == 0 {
@@ -89,8 +91,14 @@ func runBuild(args []string) {
 		os.Exit(1)
 	}
 
-	if err := render.Build(templatePath, contexts, *outDir, *check); err != nil {
-		fmt.Fprintln(os.Stderr, "error:", err)
+	var buildErr error
+	if *combined {
+		buildErr = render.BuildCombined(templatePath, contexts, *outDir, *check)
+	} else {
+		buildErr = render.Build(templatePath, contexts, *outDir, *check)
+	}
+	if buildErr != nil {
+		fmt.Fprintln(os.Stderr, "error:", buildErr)
 		os.Exit(1)
 	}
 }
