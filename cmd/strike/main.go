@@ -18,7 +18,7 @@ Usage:
 
 Flags:
   --palette   Path or URL to palette.json (default: fetch from flynt-theme/flynt)
-  --out       Output directory (default: dist/)
+  --out       Output directory (default: current directory)
   --check     Exit non-zero if outputs are stale, without writing
   --combined  Render once with both dark and light contexts (for single-file themes)
 `
@@ -65,7 +65,7 @@ func partitionArgs(args []string, boolFlags map[string]bool) (flags, positional 
 func runBuild(args []string) {
 	fs := flag.NewFlagSet("build", flag.ExitOnError)
 	paletteSrc := fs.String("palette", palette.DefaultURL, "path or URL to palette.json")
-	outDir := fs.String("out", "dist", "output directory")
+	outDir := fs.String("out", ".", "output directory")
 	check := fs.Bool("check", false, "check outputs are up to date without writing")
 	combined := fs.Bool("combined", false, "render once with both dark and light contexts")
 
