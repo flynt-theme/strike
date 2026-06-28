@@ -1,20 +1,19 @@
-<br />
+# Strike
 
-<p align="center">
-  <h1 align="center">Strike</h1>
-</p>
-
-<p align="center">Theme generator for <a href="https://github.com/flynt-theme/flynt">Flynt</a>. Write one template per app, generate all variants.</p>
-
-<br />
+Theme generator for [Flynt](https://github.com/flynt-theme/flynt). Write one template per app, generate all variants.
 
 ## Install
 
 ```sh
-go install github.com/flynt-theme/strike/cmd/strike@latest
+brew tap flynt-theme/tap
+brew install strike
 ```
 
-Requires Go 1.21+.
+Or with Go:
+
+```sh
+go install github.com/flynt-theme/strike/cmd/strike@latest
+```
 
 ## Usage
 
@@ -24,6 +23,7 @@ strike build <template> [flags]
 Flags:
   --palette   Path or URL to palette.json  (default: flynt-theme/flynt on GitHub)
   --out       Output directory             (default: dist/ next to the template)
+  --combined  Render once with both dark and light contexts (for single-file themes)
   --check     Exit non-zero if outputs are stale, without writing
 ```
 
@@ -31,6 +31,12 @@ Flags:
 
 ```sh
 strike build theme.yaml.tmpl --palette ../flynt/palette.json
+```
+
+**Example** - single-file theme (e.g. Obsidian):
+
+```sh
+strike build theme.css.tmpl --combined
 ```
 
 **Example** - CI check (verify committed files match the template):
@@ -91,6 +97,8 @@ Available shades: `50` `100` `150` `200` `300` `400` `500` `600` `700` `800` `85
 
 | Function | Example |
 |----------|---------|
+| `hex2rgb` | `{{ hex2rgb .amber }}` → `198,159,42` |
+| `shade` | `{{ shade .dark.shades "amber" "400" }}` |
 | `lower` | `{{ lower .variant }}` |
 | `upper` | `{{ upper .label }}` |
 
@@ -98,6 +106,7 @@ Available shades: `50` `100` `150` `200` `300` `400` `500` `600` `700` `800` `85
 
 | App | Repo |
 |-----|------|
+| Obsidian | [flynt-theme/flynt-obsidian](https://github.com/flynt-theme/flynt-obsidian) |
 | Warp | [flynt-theme/flynt-warp](https://github.com/flynt-theme/flynt-warp) |
 | Zed | [flynt-theme/flynt-zed](https://github.com/flynt-theme/flynt-zed) |
 
