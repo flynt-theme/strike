@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 )
 
 const DefaultURL = "https://raw.githubusercontent.com/flynt-theme/flynt/main/palette.json"
@@ -58,8 +59,10 @@ func hslToHex(h, s, l float64) string {
 func buildContext(variant string, tokens []token) Context {
 	labels := map[string]string{"dark": "Flynt Dark", "light": "Flynt Light"}
 	label, ok := labels[variant]
-	if !ok {
+	if !ok && len(variant) > 0 {
 		label = "Flynt " + strings.ToUpper(variant[:1]) + variant[1:]
+	} else if !ok {
+		label = "Flynt"
 	}
 
 	base := map[string]string{}
@@ -103,7 +106,8 @@ func Load(src string) ([]Context, error) {
 	var err error
 
 	if strings.HasPrefix(src, "http://") || strings.HasPrefix(src, "https://") {
-		resp, err := http.Get(src)
+		client := &http.Client{Timeout: 30 * time.Second}
+		resp, err := client.Get(src)
 		if err != nil {
 			return nil, fmt.Errorf("fetch %s: %w", src, err)
 		}

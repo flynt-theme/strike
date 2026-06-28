@@ -22,7 +22,7 @@ strike build <template> [flags]
 
 Flags:
   --palette   Path or URL to palette.json  (default: flynt-theme/flynt on GitHub)
-  --out       Output directory             (default: dist/ next to the template)
+  --out       Output directory             (default: template directory)
   --combined  Render once with both dark and light contexts (for single-file themes)
   --check     Exit non-zero if outputs are stale, without writing
 ```

@@ -39,63 +39,72 @@ func parseTemplate(path string) (outputTmpl string, bodyTmpl string, err error) 
 	return outputLine, string(raw[len(m[0]):]), nil
 }
 
-func hex2rgb(hex string) string {
-	hex = strings.TrimPrefix(hex, "#")
-	if len(hex) != 6 {
-		return "0,0,0"
+func parseHex(s string) (r, g, b int64, err error) {
+	s = strings.TrimPrefix(s, "#")
+	if len(s) != 6 {
+		return 0, 0, 0, fmt.Errorf("invalid hex color %q", "#"+s)
 	}
-	r, _ := strconv.ParseInt(hex[0:2], 16, 64)
-	g, _ := strconv.ParseInt(hex[2:4], 16, 64)
-	b, _ := strconv.ParseInt(hex[4:6], 16, 64)
-	return fmt.Sprintf("%d,%d,%d", r, g, b)
+	r, err = strconv.ParseInt(s[0:2], 16, 64)
+	if err == nil {
+		g, err = strconv.ParseInt(s[2:4], 16, 64)
+	}
+	if err == nil {
+		b, err = strconv.ParseInt(s[4:6], 16, 64)
+	}
+	return r, g, b, err
+}
+
+func hex2rgb(hex string) (string, error) {
+	r, g, b, err := parseHex(hex)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%d,%d,%d", r, g, b), nil
+}
+
+func hex2rgbf(hex string) (string, error) {
+	r, g, b, err := parseHex(hex)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%.4f %.4f %.4f", float64(r)/255, float64(g)/255, float64(b)/255), nil
+}
+
+func hexchan(hex, channel string) (string, error) {
+	r, g, b, err := parseHex(hex)
+	if err != nil {
+		return "", err
+	}
+	switch channel {
+	case "r":
+		return fmt.Sprintf("%.4f", float64(r)/255), nil
+	case "g":
+		return fmt.Sprintf("%.4f", float64(g)/255), nil
+	case "b":
+		return fmt.Sprintf("%.4f", float64(b)/255), nil
+	default:
+		return "", fmt.Errorf("hexchan: unknown channel %q (want r, g, or b)", channel)
+	}
 }
 
 func nohash(hex string) string {
 	return strings.TrimPrefix(hex, "#")
 }
 
-func hex2rgbf(hex string) string {
-	hex = strings.TrimPrefix(hex, "#")
-	if len(hex) != 6 {
-		return "0.0000 0.0000 0.0000"
-	}
-	r, _ := strconv.ParseInt(hex[0:2], 16, 64)
-	g, _ := strconv.ParseInt(hex[2:4], 16, 64)
-	b, _ := strconv.ParseInt(hex[4:6], 16, 64)
-	return fmt.Sprintf("%.4f %.4f %.4f", float64(r)/255, float64(g)/255, float64(b)/255)
-}
-
-func hexchan(hex, channel string) string {
-	hex = strings.TrimPrefix(hex, "#")
-	if len(hex) != 6 {
-		return "0.0000"
-	}
-	var off int
-	switch channel {
-	case "r":
-		off = 0
-	case "g":
-		off = 2
-	case "b":
-		off = 4
-	default:
-		return "0.0000"
-	}
-	v, _ := strconv.ParseInt(hex[off:off+2], 16, 64)
-	return fmt.Sprintf("%.4f", float64(v)/255)
-}
-
-func shadeFunc(shades interface{}, color, level string) string {
+func shadeFunc(shades interface{}, color, level string) (string, error) {
 	m, ok := shades.(map[string]map[string]string)
 	if !ok {
-		return "#000000"
+		return "", fmt.Errorf("shade: first argument must be .shades")
 	}
-	if colors, ok := m[color]; ok {
-		if v, ok := colors[level]; ok {
-			return v
-		}
+	colors, ok := m[color]
+	if !ok {
+		return "", fmt.Errorf("shade: unknown color %q", color)
 	}
-	return "#000000"
+	v, ok := colors[level]
+	if !ok {
+		return "", fmt.Errorf("shade: unknown level %q for color %q", level, color)
+	}
+	return v, nil
 }
 
 func buildFuncs() template.FuncMap {
@@ -125,21 +134,32 @@ func buildData(ctx palette.Context) map[string]any {
 	return data
 }
 
-func BuildCombined(templatePath string, contexts []palette.Context, outDir string, check bool) error {
-	outputTmpl, bodyTmpl, err := parseTemplate(templatePath)
+type compiledTemplate struct {
+	output *template.Template
+	body   *template.Template
+}
+
+func compileTemplate(path string) (*compiledTemplate, error) {
+	outputTmpl, bodyTmpl, err := parseTemplate(path)
 	if err != nil {
-		return err
+		return nil, err
 	}
-
 	funcs := buildFuncs()
-
 	outT, err := template.New("output").Funcs(funcs).Parse(outputTmpl)
 	if err != nil {
-		return fmt.Errorf("parse output template: %w", err)
+		return nil, fmt.Errorf("parse output template: %w", err)
 	}
 	bodyT, err := template.New("body").Funcs(funcs).Parse(bodyTmpl)
 	if err != nil {
-		return fmt.Errorf("parse body template: %w", err)
+		return nil, fmt.Errorf("parse body template: %w", err)
+	}
+	return &compiledTemplate{output: outT, body: bodyT}, nil
+}
+
+func BuildCombined(templatePath string, contexts []palette.Context, outDir string, check bool) error {
+	tmpl, err := compileTemplate(templatePath)
+	if err != nil {
+		return err
 	}
 
 	data := map[string]any{}
@@ -148,12 +168,12 @@ func BuildCombined(templatePath string, contexts []palette.Context, outDir strin
 	}
 
 	var outName bytes.Buffer
-	if err := outT.Execute(&outName, data); err != nil {
+	if err := tmpl.output.Execute(&outName, data); err != nil {
 		return fmt.Errorf("render output filename: %w", err)
 	}
 
 	var body bytes.Buffer
-	if err := bodyT.Execute(&body, data); err != nil {
+	if err := tmpl.body.Execute(&body, data); err != nil {
 		return fmt.Errorf("render body: %w", err)
 	}
 
@@ -165,7 +185,7 @@ func BuildCombined(templatePath string, contexts []palette.Context, outDir strin
 			return fmt.Errorf("check failed: missing: %s", outPath)
 		} else if err != nil {
 			return err
-		} else if string(existing) != body.String() {
+		} else if !bytes.Equal(existing, body.Bytes()) {
 			return fmt.Errorf("check failed: stale: %s", outPath)
 		}
 		return nil
@@ -182,20 +202,9 @@ func BuildCombined(templatePath string, contexts []palette.Context, outDir strin
 }
 
 func Build(templatePath string, contexts []palette.Context, outDir string, check bool) error {
-	outputTmpl, bodyTmpl, err := parseTemplate(templatePath)
+	tmpl, err := compileTemplate(templatePath)
 	if err != nil {
 		return err
-	}
-
-	funcs := buildFuncs()
-
-	outT, err := template.New("output").Funcs(funcs).Parse(outputTmpl)
-	if err != nil {
-		return fmt.Errorf("parse output template: %w", err)
-	}
-	bodyT, err := template.New("body").Funcs(funcs).Parse(bodyTmpl)
-	if err != nil {
-		return fmt.Errorf("parse body template: %w", err)
 	}
 
 	var stale []string
@@ -204,12 +213,12 @@ func Build(templatePath string, contexts []palette.Context, outDir string, check
 		data := buildData(ctx)
 
 		var outName bytes.Buffer
-		if err := outT.Execute(&outName, data); err != nil {
+		if err := tmpl.output.Execute(&outName, data); err != nil {
 			return fmt.Errorf("render output filename: %w", err)
 		}
 
 		var body bytes.Buffer
-		if err := bodyT.Execute(&body, data); err != nil {
+		if err := tmpl.body.Execute(&body, data); err != nil {
 			return fmt.Errorf("render body for %s: %w", ctx.Variant, err)
 		}
 
@@ -221,7 +230,7 @@ func Build(templatePath string, contexts []palette.Context, outDir string, check
 				stale = append(stale, "missing: "+outPath)
 			} else if err != nil {
 				return err
-			} else if string(existing) != body.String() {
+			} else if !bytes.Equal(existing, body.Bytes()) {
 				stale = append(stale, "stale:   "+outPath)
 			}
 		} else {
