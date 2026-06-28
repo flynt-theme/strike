@@ -67,6 +67,7 @@ func buildContext(variant string, tokens []token) Context {
 	base := map[string]string{}
 	accents := map[string]string{}
 	accentHues := map[string]float64{}
+	accentSats := map[string]float64{}
 
 	for _, t := range tokens {
 		name := t.Token
@@ -77,14 +78,16 @@ func buildContext(variant string, tokens []token) Context {
 		} else {
 			accents[name] = hex
 			accentHues[name] = float64(t.HSL[0])
+			accentSats[name] = float64(t.HSL[1])
 		}
 	}
 
 	shades := map[string]map[string]string{}
 	for name, hue := range accentHues {
+		sat := accentSats[name]
 		shades[name] = map[string]string{}
 		for _, sh := range shadeOrder {
-			shades[name][sh] = hslToHex(hue, 50, lightness[sh])
+			shades[name][sh] = hslToHex(hue, sat, lightness[sh])
 		}
 	}
 
